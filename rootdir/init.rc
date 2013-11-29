@@ -17,6 +17,9 @@ on early-init
     # This should occur before anything else (e.g. ueventd) is started.
     setcon u:r:init:s0
 
+    # Set the security context of /adb_keys if present.
+    restorecon /adb_keys
+
     start ueventd
 
 # create mountpoints
@@ -204,6 +207,7 @@ on post-fs-data
     # create basic filesystem structure
     mkdir /data/misc 01771 system misc
     mkdir /data/misc/adb 02750 system shell
+    mkdir /data/misc/audit 02750 audit system
     mkdir /data/misc/bluedroid 0770 bluetooth net_bt_stack
     mkdir /data/misc/bluetooth 0770 system system
     mkdir /data/misc/keystore 0700 keystore keystore
@@ -218,6 +222,10 @@ on post-fs-data
     chmod 0660 /data/misc/wifi/wpa_supplicant.conf
     mkdir /data/local 0751 root root
     mkdir /data/misc/media 0700 media media
+
+    # Set security context of any pre-existing /data/misc/adb/adb_keys file.
+    restorecon /data/misc/adb
+    restorecon /data/misc/adb/adb_keys
 
     # For security reasons, /data/local/tmp should always be empty.
     # Do not place files or directories in /data/local/tmp
@@ -255,6 +263,9 @@ on post-fs-data
 
     # Separate location for storing security policy files on data
     mkdir /data/security 0711 system system
+
+    # Reload policy from /data/security if present.
+    setprop selinux.reload_policy 1
 
     # If there is no fs-post-data action in the init.<device>.rc file, you
     # must uncomment this line, otherwise encrypted filesystems
@@ -353,8 +364,9 @@ on boot
     chown root radio /proc/cmdline
 
 # Set these so we can remotely update SELinux policy
-    chown system system /sys/fs/selinux/load
     chown system system /sys/fs/selinux/enforce
+    chown -R system system /sys/fs/selinux/booleans
+    chown system system /sys/fs/selinux/commit_pending_bools
 
 # Define TCP buffer sizes for various networks
 #   ReadMin, ReadInitial, ReadMax, WriteMin, WriteInitial, WriteMax,
@@ -406,6 +418,9 @@ on property:sys.powerctl=*
 on property:sys.sysctl.extra_free_kbytes=*
     write /proc/sys/vm/extra_free_kbytes ${sys.sysctl.extra_free_kbytes}
 
+on property:selinux.reload_policy=1
+    chown -R system system /sys/fs/selinux/booleans
+
 ## Daemon processes to be run by init.
 ##
 service ueventd /sbin/ueventd
@@ -423,16 +438,19 @@ service healthd-charger /sbin/healthd -n
     critical
     seclabel u:r:healthd:s0
 
-on property:selinux.reload_policy=1
-    restart ueventd
-    restart installd
-
 service console /system/bin/sh
     class core
     console
     disabled
     user shell
     group log
+
+service netlabels /system/bin/selinux-network.sh
+    class core
+    oneshot
+
+service auditd /system/bin/auditd -k
+    class main
 
 on property:ro.debuggable=1
     start console
