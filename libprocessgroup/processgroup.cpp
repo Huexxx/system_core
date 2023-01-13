@@ -239,7 +239,7 @@ static bool RemoveUidProcessGroups(const std::string& uid_path, bool empty_only)
             auto path = StringPrintf("%s/%s", uid_path.c_str(), dir->d_name);
             if (empty_only) {
                 struct stat st;
-                auto procs_file = StringPrintf("%s/%s", path.c_str(),
+                auto procs_file = StringPrintf("%s%s", path.c_str(),
                                                PROCESSGROUP_CGROUP_PROCS_FILE);
                 if (stat(procs_file.c_str(), &st) == -1) {
                     PLOG(ERROR) << "Failed to get stats for " << procs_file;
